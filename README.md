@@ -24,6 +24,9 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 - `Assets/Scripts/UI/HUD/HUDController.cs`
   - HUD 표시 전용 API
   - `SetHealth`, `SetOxygen`, `SetCombatState`, `SetTurnState`, `SetPrompt`
+- `Assets/Scripts/UI/HUD/CombatLogController.cs`
+  - Scroll View 기반 로그 누적 출력
+  - `AppendLog`, `ClearLog` + 디버그 버튼 출력/삭제
 - `Assets/Scripts/UI/Options/OptionsPanel.cs`
   - Pause 내 Options 열기/닫기
   - Master/BGM/SFX 슬라이더 값 `%` 텍스트 표시
@@ -174,6 +177,43 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 
 슬라이더를 움직이면 즉시 저장되고 `%` 텍스트가 즉시 갱신됩니다.
 
+
+
+## CombatLog(Scroll View) 추가 방법
+
+`Panel_HUD`(또는 별도 HUD 하위 패널) 안에 아래 구조를 추가하세요.
+
+### 1) UI 오브젝트 구조
+- `Panel_CombatLog`
+  - `ScrollView_CombatLog` (Scroll View)
+    - `Viewport`
+      - `Content`
+        - `Txt_LogEntryTemplate` (Text, 템플릿용)
+  - `Panel_LogDebugButtons`
+    - `Btn_LogAttack`
+    - `Btn_LogDamage`
+    - `Btn_LogOxygen`
+    - `Btn_LogClear`
+
+### 2) 컴포넌트 설정
+1. `Panel_CombatLog`에 `CombatLogController` 추가
+2. `Scroll Rect` → `ScrollView_CombatLog`의 `ScrollRect`
+3. `Content Root` → `Content`의 `RectTransform`
+4. `Log Entry Template` → `Txt_LogEntryTemplate` (Text)
+5. 디버그 버튼 4개를 각각 연결
+
+### 3) Scroll View 권장 세팅
+- `Content`에 `Vertical Layout Group` + `Content Size Fitter(Vertical = Preferred Size)`
+- `Txt_LogEntryTemplate`는 기본적으로 숨김 상태여도 됨(스크립트에서 Awake 시 비활성 처리)
+- `ScrollRect`는 Vertical만 사용 권장
+
+### 4) 런타임 동작
+- 버튼을 누르면 로그가 하단에 누적되고 자동으로 맨 아래로 스크롤됩니다.
+- `Btn_LogClear`는 로그를 모두 삭제합니다.
+- 다른 시스템에서 직접 호출도 가능:
+  - `AppendLog("Enemy is charging...")`
+  - `ClearLog()`
+
 ---
 
 ## 동작 검증 체크리스트
@@ -192,6 +232,7 @@ Play 모드에서 아래를 확인하세요:
 6. `Btn_DebugWin` 클릭 시 `End`
 7. Pause에서 Options 열고 닫기 가능
 8. 슬라이더 조절 시 `%` 값 갱신 + 재실행 후 값 유지(PlayerPrefs)
+9. CombatLog 디버그 버튼 클릭 시 Scroll View 로그 누적/삭제 동작
 
 ---
 
