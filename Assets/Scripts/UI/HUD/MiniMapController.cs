@@ -15,9 +15,29 @@ public class MiniMapController : MonoBehaviour
     [Header("Marker")]
     [SerializeField] private bool clampMarkerInsideMap = true;
 
+    [Header("Debug Movement")]
+    [SerializeField] private bool useDebugWASD;
+    [SerializeField] private float debugMoveSpeed = 8f;
+    [SerializeField] private float debugRotateSpeed = 120f;
+
+    private Vector3 debugWorldPosition;
+    private float debugYaw;
+
+    private void Awake()
+    {
+        SyncDebugStateFromPlayer();
+    }
+
     private void LateUpdate()
     {
-        if (player == null || miniMapArea == null || playerMarker == null)
+        if (miniMapArea == null || playerMarker == null)
+        {
+            return;
+        }
+
+        UpdateDebugMovement();
+
+        if (!HasValidPositionSource())
         {
             return;
         }
@@ -29,6 +49,7 @@ public class MiniMapController : MonoBehaviour
     public void SetPlayer(Transform target)
     {
         player = target;
+        SyncDebugStateFromPlayer();
     }
 
     public void SetWorldBounds(Vector2 min, Vector2 max)
@@ -44,8 +65,9 @@ public class MiniMapController : MonoBehaviour
         var safeRangeX = Mathf.Max(0.0001f, worldMax.x - worldMin.x);
         var safeRangeZ = Mathf.Max(0.0001f, worldMax.y - worldMin.y);
 
-        var normalizedX = (player.position.x - worldMin.x) / safeRangeX;
-        var normalizedY = (player.position.z - worldMin.y) / safeRangeZ;
+        var worldPosition = GetCurrentWorldPosition();
+        var normalizedX = (worldPosition.x - worldMin.x) / safeRangeX;
+        var normalizedY = (worldPosition.z - worldMin.y) / safeRangeZ;
 
         if (clampMarkerInsideMap)
         {
@@ -66,7 +88,7 @@ public class MiniMapController : MonoBehaviour
             return;
         }
 
-        var yaw = player.eulerAngles.y;
+        var yaw = GetCurrentYaw();
 
         // 미니맵은 북쪽(월드 +Z)이 항상 위를 향하도록 고정.
         // Unity UI 회전은 시계 방향이 음수이므로 yaw를 음수로 반영.
@@ -74,5 +96,59 @@ public class MiniMapController : MonoBehaviour
 
         // 화살표 기준점을 플레이어 마커와 항상 동일하게 유지.
         playerDirectionArrow.anchoredPosition = playerMarker.anchoredPosition;
+    }
+
+    private void UpdateDebugMovement()
+    {
+        if (!useDebugWASD)
+        {
+            return;
+        }
+
+        var horizontal = 0f;
+        var vertical = 0f;
+
+        if (Input.GetKey(KeyCode.A)) horizontal -= 1f;
+        if (Input.GetKey(KeyCode.D)) horizontal += 1f;
+        if (Input.GetKey(KeyCode.S)) vertical -= 1f;
+        if (Input.GetKey(KeyCode.W)) vertical += 1f;
+
+        var input = new Vector2(horizontal, vertical);
+        if (input.sqrMagnitude > 1f)
+        {
+            input.Normalize();
+        }
+
+        var delta = new Vector3(input.x, 0f, input.y) * (debugMoveSpeed * Time.deltaTime);
+        debugWorldPosition += delta;
+
+        if (Input.GetKey(KeyCode.Q)) debugYaw -= debugRotateSpeed * Time.deltaTime;
+        if (Input.GetKey(KeyCode.E)) debugYaw += debugRotateSpeed * Time.deltaTime;
+    }
+
+    private bool HasValidPositionSource()
+    {
+        return useDebugWASD || player != null;
+    }
+
+    private Vector3 GetCurrentWorldPosition()
+    {
+        return useDebugWASD ? debugWorldPosition : player.position;
+    }
+
+    private float GetCurrentYaw()
+    {
+        return useDebugWASD ? debugYaw : player.eulerAngles.y;
+    }
+
+    private void SyncDebugStateFromPlayer()
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        debugWorldPosition = player.position;
+        debugYaw = player.eulerAngles.y;
     }
 }

@@ -292,3 +292,15 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
 - 북쪽 고정 미니맵이므로 맵 자체는 회전하지 않음
 - 화살표는 `-player.eulerAngles.y`로 회전되어 현재 시야 방향을 표시
 
+### 5) 디버그 이동(WASD)으로 미니맵 확인
+플레이어가 아직 없거나 연결 전이어도 미니맵 검증이 가능하도록 `MiniMapController`에 디버그 이동 기능이 있습니다.
+
+- `Use Debug WASD` 체크
+- `Debug Move Speed`로 평면(X/Z) 이동 속도 조절
+- `Debug Rotate Speed`로 화살표 회전 속도 조절
+
+입력:
+- `W/A/S/D`: 디버그 월드 좌표 X/Z 이동
+- `Q/E`: 바라보는 방향(yaw) 회전
+
+이 모드가 켜져 있으면 실제 Player Transform 대신 디버그 위치/방향으로 미니맵 마커와 화살표가 갱신됩니다.
