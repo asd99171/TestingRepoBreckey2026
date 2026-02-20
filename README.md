@@ -44,6 +44,15 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 3. `CursorModeController` 컴포넌트 추가
 4. `CursorModeController > Game State Manager` 슬롯에 `GameSystems`의 `GameStateManager` 드래그
 
+#### 커서 할당/동작 설정(중요)
+- 기본 연결은 위 4번으로 끝입니다. (`GameStateManager` 참조만 연결하면 됨)
+- `CursorModeController`는 상태 변경 이벤트를 받아 자동으로 커서를 제어합니다.
+  - `Playing` 상태 + 사용자 액션으로 진입한 경우: `Locked + Hidden`
+  - 그 외 상태(`Start/Paused/Dead/End`): `Unlocked + Visible`
+- 참조를 비워둔 경우에도 `GameStateManager.Instance`를 자동으로 찾도록 되어 있지만,
+  **씬에서 명시적으로 슬롯에 연결하는 방식**을 권장합니다(초기화 순서 이슈 방지).
+- 참고: 커서 잠금은 플랫폼/에디터 정책상 실제 빌드와 에디터에서 체감이 다를 수 있습니다.
+
 ### 2) Canvas / UIRoot 구성
 1. `Canvas` 생성(없으면)
 2. `Canvas` 하위에 `UIRoot` 오브젝트 생성
@@ -214,6 +223,74 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
   - `AppendLog("Enemy is charging...")`
   - `ClearLog()`
 
+### 5) CombatLog 출력 문구 바꾸는 방법
+
+#### A. 코드 호출부에서 메시지 바꾸기(권장)
+`CombatLogController`는 `AppendLog(string message)`로 받은 문자열을 그대로 출력합니다.
+
+```csharp
+combatLogController.AppendLog("고블린이 독침을 준비합니다!");
+combatLogController.AppendLog($"플레이어가 {damage} 피해를 입었습니다.");
+```
+
+출력 시 실제 화면에는 자동으로 시간 접두어가 붙습니다.
+- 예: `[14:22:08] 고블린이 독침을 준비합니다!`
+
+#### B. 디버그 버튼 기본 문구 바꾸기
+테스트용 버튼 문구를 바꾸고 싶으면 `CombatLogController.cs`의 아래 메서드 문자열을 수정하세요.
+- `DebugLogAttack()`
+- `DebugLogDamage()`
+- `DebugLogOxygen()`
+
+#### C. 시간 표시/포맷까지 바꾸기
+`AppendLog()` 내부의 아래 코드 형식을 수정하면 됩니다.
+
+```csharp
+entry.text = $"[{System.DateTime.Now:HH:mm:ss}] {message}";
+```
+
+예를 들어 시간 없이 출력하고 싶으면 아래처럼 변경:
+
+```csharp
+entry.text = message;
+```
+
+---
+
+## HP바 같은 요소(Progress Bar) 적용 가이드
+
+`HUDController`는 `Image.fillAmount`를 사용해 HP/O2 바를 채우는 구조입니다.
+
+### 1) 기본 HP 바 프리팹/오브젝트 구성
+1. 배경 이미지(`HealthBar_BG`) 생성
+2. 전경 이미지(`HealthBar_Fill`)를 자식으로 생성
+3. `HealthBar_Fill`의 `Image Type`을 **Filled**로 설정
+4. `Fill Method`는 보통 **Horizontal**, `Fill Origin`은 Left 권장
+5. `Panel_HUD`의 `HUDController > Health Bar` 슬롯에 `HealthBar_Fill` 연결
+6. `Txt_Health` 텍스트 연결
+
+> 같은 방식으로 O2/스태미나/마나 바도 재사용할 수 있습니다.
+
+### 2) 왜 Filled 타입이 중요한가?
+- `HUDController.SetHealth()` → 내부에서 `bar.fillAmount = normalized`를 호출합니다.
+- 즉 `Image Type`이 `Filled`가 아니면 값이 변해도 시각적으로 바가 줄지 않을 수 있습니다.
+
+### 3) 외부 시스템에서 실제 값 반영하기
+전투/스탯 시스템에서 값이 바뀔 때마다 아래처럼 호출합니다.
+
+```csharp
+hudController.SetHealth(currentHp, maxHp);
+hudController.SetOxygen(currentOxygen, maxOxygen);
+```
+
+`HUDController`는 자동으로:
+- 바 fillAmount 갱신
+- 텍스트(`HP 75 / 100` 형태) 갱신
+
+### 4) HP 외 다른 바(예: Stamina) 추가 팁
+- 동일 패턴으로 `Image + Text` 필드를 추가하고,
+- `ApplyBarAndLabel(...)`를 재사용하는 `SetStamina(current, max)` 메서드를 만들면 빠르게 확장 가능합니다.
+
 ---
 
 ## 동작 검증 체크리스트
@@ -243,6 +320,9 @@ Play 모드에서 아래를 확인하세요:
   - `GameStateManager` 참조가 `UIRoot`, `CursorModeController`에 연결되었는지 확인
 - HUD 바가 안 차면:
   - `HealthBar/OxygenBar` Image 타입이 Filled인지 확인
+- 커서 잠금/해제가 기대대로 안 되면:
+  - `CursorModeController > Game State Manager` 참조 연결 확인
+  - `NewGame`/`Resume`처럼 사용자 액션으로 `Playing`에 진입했는지 확인
 - 옵션 값이 저장 안 되면:
   - 플레이 중 슬라이더 이동 후 에디터 중지 전 값이 변경되었는지 확인
 
