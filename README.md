@@ -252,3 +252,55 @@ Play 모드에서 아래를 확인하세요:
 
 본 구현은 Steven 담당 항목(UI/HUD 표시/상태 전환/입력 라우팅/옵션 UI 저장)만 포함합니다.
 Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습니다.
+
+## 미니맵(북쪽 고정 + 플레이어 방향 화살표) 추가 방법
+
+`Panel_HUD` 하위에 미니맵 UI를 만들고 `MiniMapController`를 붙이면,
+- 맵은 항상 **동서남북 고정**
+- 플레이어 아이콘은 **월드 위치(X/Z)** 따라 이동
+- 화살표는 **플레이어가 바라보는 방향(yaw)** 을 표시
+
+### 1) UI 오브젝트 구성
+- `Panel_HUD`
+  - `Panel_MiniMap`
+    - `Img_MiniMapFrame` (배경/테두리)
+    - `MiniMapArea` (RectTransform, 실제 좌표 매핑 영역)
+      - `Icon_Player` (RectTransform)
+      - `Icon_PlayerArrow` (RectTransform)
+
+> `Icon_PlayerArrow`는 삼각형/화살표 스프라이트를 사용하고, 기본 방향이 **위쪽(북쪽)** 을 향하도록 두는 것을 권장합니다.
+
+### 2) 컴포넌트 추가
+1. `Panel_MiniMap`에 `MiniMapController` 추가
+2. 인스펙터 연결:
+   - Player → 플레이어 Transform
+   - Mini Map Area → `MiniMapArea`
+   - Player Marker → `Icon_Player`
+   - Player Direction Arrow → `Icon_PlayerArrow`
+
+### 3) 월드 범위 설정
+`MiniMapController > World Bounds (X/Z)`에 실제 플레이 가능 월드 범위를 입력:
+- World Min = `(minX, minZ)`
+- World Max = `(maxX, maxZ)`
+
+예시:
+- World Min = `(-120, -120)`
+- World Max = `(120, 120)`
+
+### 4) 동작 원리
+- 플레이어 `(x, z)`를 월드 범위에서 0~1로 정규화하여 미니맵 좌표로 변환
+- 북쪽 고정 미니맵이므로 맵 자체는 회전하지 않음
+- 화살표는 `-player.eulerAngles.y`로 회전되어 현재 시야 방향을 표시
+
+### 5) 디버그 이동(WASD)으로 미니맵 확인
+플레이어가 아직 없거나 연결 전이어도 미니맵 검증이 가능하도록 `MiniMapController`에 디버그 이동 기능이 있습니다.
+
+- `Use Debug WASD` 체크
+- `Debug Move Speed`로 평면(X/Z) 이동 속도 조절
+- `Debug Rotate Speed`로 화살표 회전 속도 조절
+
+입력:
+- `W/A/S/D`: 디버그 월드 좌표 X/Z 이동
+- `Q/E`: 바라보는 방향(yaw) 회전
+
+이 모드가 켜져 있으면 실제 Player Transform 대신 디버그 위치/방향으로 미니맵 마커와 화살표가 갱신됩니다.
