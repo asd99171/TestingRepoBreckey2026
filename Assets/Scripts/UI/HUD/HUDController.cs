@@ -6,8 +6,6 @@ public class HUDController : MonoBehaviour
     [Header("Bars")]
     [SerializeField] private Image healthBar;
     [SerializeField] private Text txtHealth;
-    [SerializeField] private Image oxygenBar;
-    [SerializeField] private Text txtOxygen;
 
     [Header("States")]
     [SerializeField] private Text txtCombatState;
@@ -17,7 +15,6 @@ public class HUDController : MonoBehaviour
     private void Start()
     {
         SetHealth(100f, 100f);
-        SetOxygen(100f, 100f);
         SetCombatState(false);
         SetTurnState(true);
         SetPrompt("Ready.");
@@ -26,11 +23,6 @@ public class HUDController : MonoBehaviour
     public void SetHealth(float current, float max)
     {
         ApplyBarAndLabel(healthBar, txtHealth, current, max, "HP");
-    }
-
-    public void SetOxygen(float current, float max)
-    {
-        ApplyBarAndLabel(oxygenBar, txtOxygen, current, max, "O2");
     }
 
     public void SetCombatState(bool inCombat)

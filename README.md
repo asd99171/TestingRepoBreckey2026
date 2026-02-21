@@ -3,7 +3,7 @@
 이 저장소는 **Unity + uGUI(Canvas)** 기준으로,
 Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 레이어 + Pause 옵션 저장(PlayerPrefs)** 을 빠르게 붙일 수 있는 최소 뼈대입니다.
 
-> ⚠️ 주의: 이동/전투/AI/스탯 계산/산소 감소/맵 탐험 로직은 포함하지 않았습니다.
+> ⚠️ 주의: 이동/전투/AI/스탯 계산/맵 탐험 로직은 포함하지 않았습니다.
 
 ---
 
@@ -23,10 +23,16 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
   - 버튼 이벤트 연결(Start/Pause/Dead/End/Debug)
 - `Assets/Scripts/UI/HUD/HUDController.cs`
   - HUD 표시 전용 API
-  - `SetHealth`, `SetOxygen`, `SetCombatState`, `SetTurnState`, `SetPrompt`
+  - `SetHealth`, `SetCombatState`, `SetTurnState`, `SetPrompt`
+- `Assets/Scripts/UI/HUD/HUDPlayerHealthBinder.cs`
+  - `PlayerHealth` 컴포넌트의 현재/최대 HP를 읽어 `HUDController`에 자동 반영
+  - 필드/프로퍼티 이름(`currentHealth`, `maxHealth`) 커스터마이즈 가능
 - `Assets/Scripts/UI/HUD/CombatLogController.cs`
   - Scroll View 기반 로그 누적 출력
   - `AppendLog`, `ClearLog` + 디버그 버튼 출력/삭제
+- `Assets/Scripts/UI/HUD/CombatLogRuntimeBridge.cs`
+  - 게임플레이 스크립트에서 CombatLog로 접근하는 런타임 브릿지
+  - `ReportPlayerDamageToEnemy(damage)` 정적 호출 지원
 - `Assets/Scripts/UI/Options/OptionsPanel.cs`
   - Pause 내 Options 열기/닫기
   - Master/BGM/SFX 슬라이더 값 `%` 텍스트 표시
@@ -127,8 +133,6 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 
 - `HealthBar` (Image, **Type=Filled** 권장)
 - `Txt_Health` (Text)
-- `OxygenBar` (Image, **Type=Filled** 권장)
-- `Txt_Oxygen` (Text)
 - `Txt_CombatState` (Text)
 - `Txt_TurnState` (Text)
 - `Txt_Prompt` (Text)
@@ -138,10 +142,20 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 외부 시스템(Sami 코드)에서 나중에 아래 메서드 호출로 값 주입:
 
 - `SetHealth(current, max)`
-- `SetOxygen(current, max)`
 - `SetCombatState(inCombat)`
 - `SetTurnState(playerTurn)`
 - `SetPrompt(text)`
+
+
+### 4) PlayerHealth와 HP UI 연동
+`Panel_HUD`에 `HUDPlayerHealthBinder`를 추가한 뒤 아래를 연결하세요.
+
+- Hud Controller → 같은 오브젝트의 `HUDController`
+- Player Health Source → 플레이어의 `PlayerHealth` 스크립트
+- Current Health Member → `currentHealth` (필요 시 변경)
+- Max Health Member → `maxHealth` (필요 시 변경)
+
+`PlayerHealth`가 필드 대신 프로퍼티를 써도 이름만 맞으면 자동으로 읽어 HUD HP가 갱신됩니다.
 
 ---
 
@@ -192,7 +206,6 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
   - `Panel_LogDebugButtons`
     - `Btn_LogAttack`
     - `Btn_LogDamage`
-    - `Btn_LogOxygen`
     - `Btn_LogClear`
 
 ### 2) 컴포넌트 설정
@@ -200,7 +213,7 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 2. `Scroll Rect` → `ScrollView_CombatLog`의 `ScrollRect`
 3. `Content Root` → `Content`의 `RectTransform`
 4. `Log Entry Template` → `Txt_LogEntryTemplate` (Text)
-5. 디버그 버튼 4개를 각각 연결
+5. 디버그 버튼 3개를 각각 연결
 
 ### 3) Scroll View 권장 세팅
 - `Content`에 `Vertical Layout Group` + `Content Size Fitter(Vertical = Preferred Size)`
@@ -214,7 +227,18 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
   - `AppendLog("Enemy is charging...")`
   - `ClearLog()`
 
-### 5) 원하는 형식(위에서 시작, 아래로 갱신, 맨 위 삭제) 적용 체크
+### 5) 게임플레이 연동 (PlayerAttackCooldown)
+`Panel_CombatLog`(또는 같은 오브젝트)에 `CombatLogRuntimeBridge`를 추가하고, `Combat Log Controller` 슬롯에 현재 `CombatLogController`를 연결하세요.
+
+그 다음 `PlayerAttackCooldown.cs`에서 실제 데미지 계산 직후 아래 한 줄을 호출하면 됩니다.
+
+```csharp
+CombatLogRuntimeBridge.ReportPlayerDamageToEnemy(damageAmount);
+```
+
+이렇게 하면 좌클릭 공격 시 CombatLog에 `Player does X damage to Enemy.` 형식으로 출력됩니다.
+
+### 6) 원하는 형식(위에서 시작, 아래로 갱신, 맨 위 삭제) 적용 체크
 아래 항목이 맞으면 요청한 동작이 적용된 상태입니다.
 
 1. 새 로그 생성 시 `Content`의 마지막 자식으로 붙어 아래쪽에 추가됨
@@ -222,7 +246,7 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
 3. `autoScrollToLatest = true`면 새 로그 생성 때마다 최신 로그 위치(하단)로 자동 이동
 4. 자동 스크롤을 끄고 싶으면 Inspector에서 `Auto Scroll To Latest` 체크 해제
 
-### 6) Scroll이 안 맞아 보이던 이유
+### 7) Scroll이 안 맞아 보이던 이유
 - `Vertical Layout Group` + `Content Size Fitter`를 쓰는 경우, 텍스트 생성 직후에는 `Content` 높이가 아직 확정되지 않은 프레임이 있습니다.
 - 이 타이밍에 바로 `verticalNormalizedPosition`을 바꾸면 ScrollRect가 무시하거나 덜 반영되는 것처럼 보일 수 있습니다.
 - 그래서 스크립트에서 **한 프레임 뒤** 레이아웃을 강제 갱신한 후 스크롤 값을 적용하도록 처리해야 안정적으로 동작합니다.
@@ -245,7 +269,7 @@ Play 모드에서 아래를 확인하세요:
 6. `Btn_DebugWin` 클릭 시 `End`
 7. Pause에서 Options 열고 닫기 가능
 8. 슬라이더 조절 시 `%` 값 갱신 + 재실행 후 값 유지(PlayerPrefs)
-9. CombatLog 디버그 버튼 클릭 시 Scroll View 로그 누적/삭제 동작
+9. 좌클릭 공격 시 CombatLog에 `Player does X damage to Enemy.` 출력 확인
 
 ---
 
@@ -255,7 +279,7 @@ Play 모드에서 아래를 확인하세요:
   - `UIRoot`의 버튼 참조 누락 여부 확인
   - `GameStateManager` 참조가 `UIRoot`, `CursorModeController`에 연결되었는지 확인
 - HUD 바가 안 차면:
-  - `HealthBar/OxygenBar` Image 타입이 Filled인지 확인
+  - `HealthBar` Image 타입이 Filled인지 확인
 - 옵션 값이 저장 안 되면:
   - 플레이 중 슬라이더 이동 후 에디터 중지 전 값이 변경되었는지 확인
 
@@ -292,16 +316,15 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
    - Mini Map Content → `MiniMapContent`
    - Player Marker → `Icon_Player`
    - Player Direction Arrow → `Icon_PlayerArrow`
-   - Use View Window Mode → 체크(권장)
+   - (선택) Map Bounds Collider → Grid Map 범위를 대표하는 Collider
+   - (선택) Map Bounds Renderer → Grid Map 범위를 대표하는 Renderer
+   - Apply Bounds From Map Source On Awake → 체크 권장
 
 ### 3) 월드 범위 설정
-`MiniMapController > World Bounds (X/Z)`에 실제 플레이 가능 월드 범위를 입력:
-- World Min = `(minX, minZ)`
-- World Max = `(maxX, maxZ)`
-
-예시:
-- World Min = `(-120, -120)`
-- World Max = `(120, 120)`
+- 권장: `Map Bounds Collider` 또는 `Map Bounds Renderer`를 연결해 자동으로 월드 범위를 적용
+- 수동: `World Bounds (X/Z)`에 직접 입력
+  - World Min = `(minX, minZ)`
+  - World Max = `(maxX, maxZ)`
 
 ### 4) 동작 원리
 - 플레이어 `(x, z)`를 월드 범위에서 0~1로 정규화
@@ -313,15 +336,4 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
   - 기존 방식처럼 고정된 맵 위를 플레이어 마커가 이동
 - 화살표는 `-player.eulerAngles.y`로 회전되어 현재 시야 방향을 표시
 
-### 5) 디버그 이동(WASD)으로 미니맵 확인
-플레이어가 아직 없거나 연결 전이어도 미니맵 검증이 가능하도록 `MiniMapController`에 디버그 이동 기능이 있습니다.
-
-- `Use Debug WASD` 체크
-- `Debug Move Speed`로 평면(X/Z) 이동 속도 조절
-- `Debug Rotate Speed`로 화살표 회전 속도 조절
-
-입력:
-- `W/A/S/D`: 디버그 월드 좌표 X/Z 이동
-- `Q/E`: 바라보는 방향(yaw) 회전
-
-이 모드가 켜져 있으면 실제 Player Transform 대신 디버그 위치/방향으로 미니맵 마커와 화살표가 갱신됩니다.
+---
