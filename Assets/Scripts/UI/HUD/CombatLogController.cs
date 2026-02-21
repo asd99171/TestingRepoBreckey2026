@@ -15,7 +15,6 @@ public class CombatLogController : MonoBehaviour
     [Header("Debug Buttons (Optional)")]
     [SerializeField] private Button btnLogAttack;
     [SerializeField] private Button btnLogDamage;
-    [SerializeField] private Button btnLogOxygen;
     [SerializeField] private Button btnLogClear;
 
     private readonly List<Text> spawnedEntries = new List<Text>();
@@ -76,6 +75,12 @@ public class CombatLogController : MonoBehaviour
         }
     }
 
+    public void LogPlayerDamageToEnemy(int damage)
+    {
+        var safeDamage = Mathf.Max(0, damage);
+        AppendLog($"Player does {safeDamage} damage to Enemy.");
+    }
+
     public void DebugLogAttack()
     {
         AppendLog("[DEBUG] Player uses Slash.");
@@ -83,19 +88,13 @@ public class CombatLogController : MonoBehaviour
 
     public void DebugLogDamage()
     {
-        AppendLog("[DEBUG] Enemy takes 12 damage.");
-    }
-
-    public void DebugLogOxygen()
-    {
-        AppendLog("[DEBUG] Oxygen changed: 75 / 100.");
+        LogPlayerDamageToEnemy(12);
     }
 
     private void BindDebugButtons()
     {
         Bind(btnLogAttack, DebugLogAttack);
         Bind(btnLogDamage, DebugLogDamage);
-        Bind(btnLogOxygen, DebugLogOxygen);
         Bind(btnLogClear, ClearLog);
     }
 
