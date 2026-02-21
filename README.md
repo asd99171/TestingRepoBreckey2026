@@ -1,339 +1,106 @@
-# 1인칭 던전 RPG(UI 버티컬 슬라이스) 적용 가이드
+# Gameplay-UI 통합 가이드 (Player/Map/Environment/Enemy 기반)
 
-이 저장소는 **Unity + uGUI(Canvas)** 기준으로,
-Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 레이어 + Pause 옵션 저장(PlayerPrefs)** 을 빠르게 붙일 수 있는 최소 뼈대입니다.
+이 문서는 **기존 Debug 전용 흐름을 제거**하고, 현재 게임에 있는 실제 코드(`Player`, `Map Grid`, `Environment`, `Enemy`)로 UI가 동작하도록 붙이는 방법을 설명합니다.
 
-> ⚠️ 주의: 이동/전투/AI/스탯 계산/맵 탐험 로직은 포함하지 않았습니다.
+## 이번 적용 내용 요약
 
----
-
-## 포함된 스크립트
-
-- `Assets/Scripts/Core/GameState.cs`
-  - `Start`, `Playing`, `Paused`, `Dead`, `End` 상태 enum
-- `Assets/Scripts/Core/GameStateManager.cs`
-  - 상태 전환 중심 매니저
-  - ESC 처리(Playing↔Paused)
-  - NewGame/Resume/Retry/MainMenu/Quit, Debug Dead/End 메서드
-- `Assets/Scripts/UI/CursorModeController.cs`
-  - 상태에 따라 커서 잠금/해제
-  - **사용자 액션으로 Playing 진입 시에만 잠금 허용**
-- `Assets/Scripts/UI/UIRoot.cs`
-  - 패널 활성/비활성 전환
-  - 버튼 이벤트 연결(Start/Pause/Dead/End/Debug)
-- `Assets/Scripts/UI/HUD/HUDController.cs`
-  - HUD 표시 전용 API
-  - `SetHealth`, `SetCombatState`, `SetTurnState`, `SetPrompt`
-- `Assets/Scripts/UI/HUD/HUDPlayerHealthBinder.cs`
-  - `PlayerHealth` 컴포넌트의 현재/최대 HP를 읽어 `HUDController`에 자동 반영
-  - 필드/프로퍼티 이름(`currentHealth`, `maxHealth`) 커스터마이즈 가능
-- `Assets/Scripts/UI/HUD/CombatLogController.cs`
-  - Scroll View 기반 로그 누적 출력
-  - `AppendLog`, `ClearLog` + 디버그 버튼 출력/삭제
-- `Assets/Scripts/UI/HUD/CombatLogRuntimeBridge.cs`
-  - 게임플레이 스크립트에서 CombatLog로 접근하는 런타임 브릿지
-  - `ReportPlayerDamageToEnemy(damage)` 정적 호출 지원
-- `Assets/Scripts/UI/Options/OptionsPanel.cs`
-  - Pause 내 Options 열기/닫기
-  - Master/BGM/SFX 슬라이더 값 `%` 텍스트 표시
-  - `PlayerPrefs` 즉시 저장/로드
+- 디버그 UI 의존 제거
+  - `UIRoot`에서 `Panel_Debug`, `Btn_DebugKill/Win` 연결 제거
+  - `GameStateManager`의 `DebugSetDead/DebugSetEnd` 제거
+  - `CombatLogController`의 디버그 버튼 로깅 함수 제거
+- 실제 전투 로그 연동
+  - `PlayerAttackCooldown`에서 실제 공격 성공 시
+    - `CombatLogRuntimeBridge.ReportPlayerDamageToEnemy(damage)` 호출
+    - CombatLog에 `Player does X damage to Enemy.` 출력
+- HUD HP와 PlayerHealth 직접 연동
+  - `HUDPlayerHealthBinder`를 reflection 기반에서 `PlayerHealth` 직접 바인딩으로 변경
+  - `PlayerHealth`에 `MaxHealth`, `OnHealthChanged(int current, int max)` 추가
+  - 데미지/회복/초기화 시 HUD 갱신
+- Oxygen 관련 기능
+  - 현재 코드베이스 내 Oxygen 기능 없음(추가 제거 사항 없음)
 
 ---
 
-## Unity 씬 구성(클릭 순서)
-
-아래 순서대로 설정하면 바로 동작 확인이 가능합니다.
-
-### 1) 매니저 배치
-1. 빈 오브젝트 `GameSystems` 생성
-2. `GameStateManager` 컴포넌트 추가
-3. `CursorModeController` 컴포넌트 추가
-4. `CursorModeController > Game State Manager` 슬롯에 `GameSystems`의 `GameStateManager` 드래그
-
-### 2) Canvas / UIRoot 구성
-1. `Canvas` 생성(없으면)
-2. `Canvas` 하위에 `UIRoot` 오브젝트 생성
-3. `UIRoot`에 `UIRoot.cs` 컴포넌트 추가
-4. `UIRoot > Game State Manager` 슬롯에 `GameSystems`의 `GameStateManager` 연결
+## 씬에서 바로 적용하는 방법
 
-### 3) 패널 생성 (Canvas/UIRoot 하위)
-다음 오브젝트 이름으로 생성:
+### 1) Panel_HUD에 HP 연동
 
-- `Panel_Start`
-- `Panel_Pause`
-- `Panel_Dead`
-- `Panel_End`
-- `Panel_HUD`
-- `Panel_Debug`
+1. `Panel_HUD` 오브젝트에 `HUDController`가 있는지 확인
+2. 같은 오브젝트(또는 적절한 UI 루트)에 `HUDPlayerHealthBinder` 추가
+3. 인스펙터 연결
+   - `Hud Controller` → `HUDController` 컴포넌트
+   - `Player Health` → 플레이어 오브젝트의 `PlayerHealth`
 
-그리고 `UIRoot` 컴포넌트의 각 Panel 슬롯에 드래그 연결:
+> `PlayerHealth`를 비워두면 런타임에 `FindFirstObjectByType<PlayerHealth>()`로 자동 탐색합니다.
 
-- Panel Start → `Panel_Start`
-- Panel Pause → `Panel_Pause`
-- Panel Dead → `Panel_Dead`
-- Panel End → `Panel_End`
-- Panel Hud → `Panel_HUD`
-- Panel Debug → `Panel_Debug`
+### 2) CombatLog 전투 로그 연결
 
-### 4) 버튼 생성 및 연결
+1. `Panel_CombatLog`에 `CombatLogController` 확인
+2. 같은 오브젝트(또는 하위)에 `CombatLogRuntimeBridge` 추가
+3. `Combat Log Controller` 슬롯에 `CombatLogController` 연결
+4. `CombatLogController` 참조 설정
+   - `Scroll Rect`
+   - `Content Root`
+   - `Log Entry Template` (비활성 템플릿 Text)
 
-#### Start 패널
-`Panel_Start` 하위:
-- `Btn_NewGame`
-- `Btn_Quit`
-
-`UIRoot`의 Start Buttons 슬롯에 연결:
-- Btn New Game → `Btn_NewGame`
-- Btn Quit → `Btn_Quit`
-
-#### Pause 패널
-`Panel_Pause` 하위:
-- `Btn_Resume`
-- `Btn_MainMenu`
-- `Btn_Quit`
+이제 플레이어가 좌클릭 공격에 성공하면 자동으로 로그가 누적됩니다.
 
-`UIRoot`의 Pause Buttons 슬롯에 연결:
-- Btn Resume → `Btn_Resume`
-- Btn Main Menu Pause → `Btn_MainMenu`
-- Btn Quit Pause → `Btn_Quit`
+### 3) UIRoot에서 Debug 슬롯 정리
 
-#### Dead 패널
-`Panel_Dead` 하위:
-- `Btn_Retry`
-- `Btn_MainMenu`
+`UIRoot` 인스펙터에서 아래 항목은 더 이상 사용하지 않습니다.
 
-`UIRoot`의 Dead Buttons 슬롯에 연결:
-- Btn Retry → `Btn_Retry`
-- Btn Main Menu Dead → `Btn_MainMenu`
+- `Panel Debug`
+- `Btn Debug Kill`
+- `Btn Debug Win`
 
-#### End 패널
-`Panel_End` 하위:
-- `Btn_MainMenu`
-- `Btn_NewGame`
+(스크립트에서 필드 제거됨)
 
-`UIRoot`의 End Buttons 슬롯에 연결:
-- Btn Main Menu End → `Btn_MainMenu`
-- Btn New Game End → `Btn_NewGame`
-
-#### Debug 패널
-`Panel_Debug` 하위:
-- `Btn_DebugKill`
-- `Btn_DebugWin`
-
-`UIRoot`의 Debug Buttons 슬롯에 연결:
-- Btn Debug Kill → `Btn_DebugKill`
-- Btn Debug Win → `Btn_DebugWin`
-
----
-
-## HUD 연결 방법
-
-1. `Panel_HUD`에 `HUDController` 컴포넌트 추가
-2. `Panel_HUD` 하위에 다음 오브젝트 생성 및 연결
-
-- `HealthBar` (Image, **Type=Filled** 권장)
-- `Txt_Health` (Text)
-- `Txt_CombatState` (Text)
-- `Txt_TurnState` (Text)
-- `Txt_Prompt` (Text)
 
-3. `HUDController` 슬롯에 각각 드래그
 
-외부 시스템(Sami 코드)에서 나중에 아래 메서드 호출로 값 주입:
+### 4) 미니맵을 "플레이어 주변 Grid 창" 방식으로 사용
 
-- `SetHealth(current, max)`
-- `SetCombatState(inCombat)`
-- `SetTurnState(playerTurn)`
-- `SetPrompt(text)`
+`MiniMapController`는 이제 기본값으로 **플레이어 중심 사각 Grid 미니맵**을 지원합니다.
 
+- `viewRadiusCells = 5` 이면 `(2*5+1)=11`칸 정사각형 창
+- 즉, 플레이어 주변 약 10칸 범위를 사각형으로 보여줌
+- 중앙 칸은 플레이어, 적이 있는 칸은 `enemyColor`, 바닥 없는 칸은 `blockedColor`로 표시
 
-### 4) PlayerHealth와 HP UI 연동
-`Panel_HUD`에 `HUDPlayerHealthBinder`를 추가한 뒤 아래를 연결하세요.
+설정 방법:
 
-- Hud Controller → 같은 오브젝트의 `HUDController`
-- Player Health Source → 플레이어의 `PlayerHealth` 스크립트
-- Current Health Member → `currentHealth` (필요 시 변경)
-- Max Health Member → `maxHealth` (필요 시 변경)
-
-`PlayerHealth`가 필드 대신 프로퍼티를 써도 이름만 맞으면 자동으로 읽어 HUD HP가 갱신됩니다.
-
----
-
-## Pause > Options 연결 방법
-
-### 1) 오브젝트 생성
-`Panel_Pause` 하위에:
-- `Btn_OptionsOpen`
-- `Panel_Options` (기본 비활성 권장)
-
-`Panel_Options` 하위에:
-- `Btn_OptionsClose`
-- `Sld_Master`, `Txt_MasterValue`
-- `Sld_BGM`, `Txt_BGMValue`
-- `Sld_SFX`, `Txt_SFXValue`
-
-### 2) 스크립트 부착
-- `OptionsPanel.cs`를 `Panel_Pause`(또는 별도 옵션 루트 오브젝트)에 추가
-
-### 3) 인스펙터 연결
-`OptionsPanel` 필드에 아래 매핑:
-- Panel Options → `Panel_Options`
-- Btn Options Open → `Btn_OptionsOpen`
-- Btn Options Close → `Btn_OptionsClose`
-- Sld Master/Bgm/Sfx → 각 슬라이더
-- Txt Master/Bgm/Sfx Value → 각 값 텍스트
-
-### 4) 저장 키
-자동 저장/로드 키:
-- `audio_master`
-- `audio_bgm`
-- `audio_sfx`
-
-슬라이더를 움직이면 즉시 저장되고 `%` 텍스트가 즉시 갱신됩니다.
-
-
-
-## CombatLog(Scroll View) 추가 방법
-
-`Panel_HUD`(또는 별도 HUD 하위 패널) 안에 아래 구조를 추가하세요.
-
-### 1) UI 오브젝트 구조
-- `Panel_CombatLog`
-  - `ScrollView_CombatLog` (Scroll View)
-    - `Viewport`
-      - `Content`
-        - `Txt_LogEntryTemplate` (Text, 템플릿용)
-  - `Panel_LogDebugButtons`
-    - `Btn_LogAttack`
-    - `Btn_LogDamage`
-    - `Btn_LogClear`
-
-### 2) 컴포넌트 설정
-1. `Panel_CombatLog`에 `CombatLogController` 추가
-2. `Scroll Rect` → `ScrollView_CombatLog`의 `ScrollRect`
-3. `Content Root` → `Content`의 `RectTransform`
-4. `Log Entry Template` → `Txt_LogEntryTemplate` (Text)
-5. 디버그 버튼 3개를 각각 연결
-
-### 3) Scroll View 권장 세팅
-- `Content`에 `Vertical Layout Group` + `Content Size Fitter(Vertical = Preferred Size)`
-- `Txt_LogEntryTemplate`는 기본적으로 숨김 상태여도 됨(스크립트에서 Awake 시 비활성 처리)
-- `ScrollRect`는 Vertical만 사용 권장
-
-### 4) 런타임 동작
-- 버튼을 누르면 로그가 하단에 누적되고 자동으로 맨 아래로 스크롤됩니다.
-- `Btn_LogClear`는 로그를 모두 삭제합니다.
-- 다른 시스템에서 직접 호출도 가능:
-  - `AppendLog("Enemy is charging...")`
-  - `ClearLog()`
-
-### 5) 게임플레이 연동 (PlayerAttackCooldown)
-`Panel_CombatLog`(또는 같은 오브젝트)에 `CombatLogRuntimeBridge`를 추가하고, `Combat Log Controller` 슬롯에 현재 `CombatLogController`를 연결하세요.
-
-그 다음 `PlayerAttackCooldown.cs`에서 실제 데미지 계산 직후 아래 한 줄을 호출하면 됩니다.
-
-```csharp
-CombatLogRuntimeBridge.ReportPlayerDamageToEnemy(damageAmount);
-```
-
-이렇게 하면 좌클릭 공격 시 CombatLog에 `Player does X damage to Enemy.` 형식으로 출력됩니다.
-
-### 6) 원하는 형식(위에서 시작, 아래로 갱신, 맨 위 삭제) 적용 체크
-아래 항목이 맞으면 요청한 동작이 적용된 상태입니다.
-
-1. 새 로그 생성 시 `Content`의 마지막 자식으로 붙어 아래쪽에 추가됨
-2. `maxEntries`를 넘기면 `Content`의 가장 오래된 항목(맨 위)이 먼저 삭제됨
-3. `autoScrollToLatest = true`면 새 로그 생성 때마다 최신 로그 위치(하단)로 자동 이동
-4. 자동 스크롤을 끄고 싶으면 Inspector에서 `Auto Scroll To Latest` 체크 해제
-
-### 7) Scroll이 안 맞아 보이던 이유
-- `Vertical Layout Group` + `Content Size Fitter`를 쓰는 경우, 텍스트 생성 직후에는 `Content` 높이가 아직 확정되지 않은 프레임이 있습니다.
-- 이 타이밍에 바로 `verticalNormalizedPosition`을 바꾸면 ScrollRect가 무시하거나 덜 반영되는 것처럼 보일 수 있습니다.
-- 그래서 스크립트에서 **한 프레임 뒤** 레이아웃을 강제 갱신한 후 스크롤 값을 적용하도록 처리해야 안정적으로 동작합니다.
-
----
-
-## 동작 검증 체크리스트
-
-Play 모드에서 아래를 확인하세요:
-
-1. 시작 시 `Start` 패널 보임
-2. `Btn_NewGame` 클릭 시 `Playing` 진입
-   - HUD + Debug 패널 활성
-   - 커서 잠김/숨김
-3. ESC 누르면 `Paused` 진입
-   - Pause 패널 활성
-   - 커서 해제/표시
-4. ESC 한 번 더 누르면 `Playing` 복귀(Resume과 동일)
-5. `Btn_DebugKill` 클릭 시 `Dead`
-6. `Btn_DebugWin` 클릭 시 `End`
-7. Pause에서 Options 열고 닫기 가능
-8. 슬라이더 조절 시 `%` 값 갱신 + 재실행 후 값 유지(PlayerPrefs)
-9. 좌클릭 공격 시 CombatLog에 `Player does X damage to Enemy.` 출력 확인
-
----
-
-## 트러블슈팅
-
-- 버튼 눌러도 반응이 없으면:
-  - `UIRoot`의 버튼 참조 누락 여부 확인
-  - `GameStateManager` 참조가 `UIRoot`, `CursorModeController`에 연결되었는지 확인
-- HUD 바가 안 차면:
-  - `HealthBar` Image 타입이 Filled인지 확인
-- 옵션 값이 저장 안 되면:
-  - 플레이 중 슬라이더 이동 후 에디터 중지 전 값이 변경되었는지 확인
-
----
-
-## 담당 범위 준수 메모
-
-본 구현은 Steven 담당 항목(UI/HUD 표시/상태 전환/입력 라우팅/옵션 UI 저장)만 포함합니다.
-Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습니다.
-
-## 미니맵(북쪽 고정 + 플레이어 방향 화살표) 추가 방법
-
-`Panel_HUD` 하위에 미니맵 UI를 만들고 `MiniMapController`를 붙이면,
-- 맵은 항상 **동서남북 고정**
-- 플레이어 아이콘은 **월드 위치(X/Z)** 따라 이동
-- 화살표는 **플레이어가 바라보는 방향(yaw)** 을 표시
-
-### 1) UI 오브젝트 구성
-- `Panel_HUD`
-  - `Panel_MiniMap`
-    - `Img_MiniMapFrame` (배경/테두리)
-    - `MiniMapArea` (RectTransform, 화면에 보이는 미니맵 윈도우)
-      - `MiniMapContent` (RectTransform, 실제 맵 이미지/타일이 들어가는 컨텐츠)
-      - `Icon_Player` (RectTransform, 항상 중앙 고정 권장)
-      - `Icon_PlayerArrow` (RectTransform)
-
-> `Icon_PlayerArrow`는 삼각형/화살표 스프라이트를 사용하고, 기본 방향이 **위쪽(북쪽)** 을 향하도록 두는 것을 권장합니다.
-
-### 2) 컴포넌트 추가
 1. `Panel_MiniMap`에 `MiniMapController` 추가
-2. 인스펙터 연결:
-   - Player → 플레이어 Transform
-   - Mini Map Area → `MiniMapArea`
-   - Mini Map Content → `MiniMapContent`
-   - Player Marker → `Icon_Player`
-   - Player Direction Arrow → `Icon_PlayerArrow`
-   - (선택) Map Bounds Collider → Grid Map 범위를 대표하는 Collider
-   - (선택) Map Bounds Renderer → Grid Map 범위를 대표하는 Renderer
-   - Apply Bounds From Map Source On Awake → 체크 권장
+2. 인스펙터 연결
+   - `Player` (비워도 자동 탐색)
+   - `Grid Map`
+   - `Grid Occupancy Index`
+   - `Mini Map Area`
+   - `Mini Map Content`
+   - `Player Marker`, `Player Direction Arrow`
+   - `Grid Cell Prefab` (UI `Image` 프리팹 1개)
+3. 권장 값
+   - `Use Grid Window Minimap` = On
+   - `View Radius Cells` = `5` (원하면 `10`으로 확장 가능)
+   - `Cell Pixel Size` = `12~16`
+   - `Refresh Interval Seconds` = `0.1~0.2`
 
-### 3) 월드 범위 설정
-- 권장: `Map Bounds Collider` 또는 `Map Bounds Renderer`를 연결해 자동으로 월드 범위를 적용
-- 수동: `World Bounds (X/Z)`에 직접 입력
-  - World Min = `(minX, minZ)`
-  - World Max = `(maxX, maxZ)`
-
-### 4) 동작 원리
-- 플레이어 `(x, z)`를 월드 범위에서 0~1로 정규화
-- `Use View Window Mode`가 켜져 있으면:
-  - 플레이어 마커는 미니맵 중앙에 고정
-  - `MiniMapContent`가 반대로 이동하여 플레이어 주변 환경이 창 안에서 흘러가듯 보임
-  - 즉, **맵은 북쪽 고정 + 플레이어 중심 시야 윈도우형**
-- `Use View Window Mode`를 끄면:
-  - 기존 방식처럼 고정된 맵 위를 플레이어 마커가 이동
-- 화살표는 `-player.eulerAngles.y`로 회전되어 현재 시야 방향을 표시
+> 참고: 이 방식은 월드 전체 텍스처를 스크롤하는 방식이 아니라, 플레이어 주변 셀을 매 프레임/주기마다 샘플링해서 그려주는 방식입니다.
 
 ---
+
+## 동작 체크리스트
+
+- 게임 시작/일시정지/종료 UI 상태 전환이 정상 동작
+- 공격이 적중하면 CombatLog에 `Player does X damage to Enemy.` 출력
+- 플레이어 HP가 변하면 Panel_HUD의 HP 바/텍스트가 즉시 갱신
+
+---
+
+## 변경된 주요 스크립트
+
+- `Assets/Scripts/Player/PlayerAttackCooldown.cs`
+- `Assets/Scripts/Player/PlayerHealth.cs`
+- `Assets/Scripts/UI/HUD/HUDPlayerHealthBinder.cs`
+- `Assets/Scripts/UI/HUD/CombatLogController.cs`
+- `Assets/Scripts/UI/UIRoot.cs`
+- `Assets/Scripts/Core/GameStateManager.cs`
+- `Assets/Scripts/UI/HUD/MiniMapController.cs`
+

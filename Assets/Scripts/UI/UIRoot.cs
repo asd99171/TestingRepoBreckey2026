@@ -12,7 +12,6 @@ public class UIRoot : MonoBehaviour
     [SerializeField] private GameObject panelDead;
     [SerializeField] private GameObject panelEnd;
     [SerializeField] private GameObject panelHud;
-    [SerializeField] private GameObject panelDebug;
 
     [Header("Start Buttons")]
     [SerializeField] private Button btnNewGame;
@@ -30,10 +29,6 @@ public class UIRoot : MonoBehaviour
     [Header("End Buttons")]
     [SerializeField] private Button btnMainMenuEnd;
     [SerializeField] private Button btnNewGameEnd;
-
-    [Header("Debug Buttons")]
-    [SerializeField] private Button btnDebugKill;
-    [SerializeField] private Button btnDebugWin;
 
     private void Awake()
     {
@@ -81,9 +76,6 @@ public class UIRoot : MonoBehaviour
 
         Bind(btnMainMenuEnd, () => gameStateManager?.GoToMainMenu());
         Bind(btnNewGameEnd, () => gameStateManager?.StartNewGame());
-
-        Bind(btnDebugKill, () => gameStateManager?.DebugSetDead());
-        Bind(btnDebugWin, () => gameStateManager?.DebugSetEnd());
     }
 
     private static void Bind(Button button, UnityEngine.Events.UnityAction action)
@@ -106,7 +98,6 @@ public class UIRoot : MonoBehaviour
 
         var playing = state == GameState.Playing;
         SetPanel(panelHud, playing);
-        SetPanel(panelDebug, playing);
     }
 
     private static void SetPanel(GameObject panel, bool active)

@@ -138,7 +138,6 @@ public sealed class PlayerAttackCooldown : MonoBehaviour
 
         // Find the closest valid target within [minRangeTiles..maxRangeTiles] in facing direction.
         GridOccupant target = null;
-        Vector2Int targetCell = originCell;
 
         for (int r = 1; r <= this.maxRangeTiles; r++)
         {
@@ -184,7 +183,6 @@ public sealed class PlayerAttackCooldown : MonoBehaviour
             if (occ != null)
             {
                 target = occ;
-                targetCell = c;
                 break; // closest target
             }
         }
@@ -203,6 +201,7 @@ public sealed class PlayerAttackCooldown : MonoBehaviour
         }
 
         hp.TakeDamage(this.damage);
+        CombatLogRuntimeBridge.ReportPlayerDamageToEnemy(this.damage);
         Debug.Log("Player attacks for " + this.damage + " damage.");
         this.cooldownRemaining = this.cooldownSeconds;
 

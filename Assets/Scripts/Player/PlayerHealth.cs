@@ -9,6 +9,7 @@ public sealed class PlayerHealth : MonoBehaviour
     [Header("Events")]
     [SerializeField] private UnityEvent onDamaged;
     [SerializeField] private UnityEvent onDied;
+    [SerializeField] private UnityEvent<int, int> onHealthChanged;
 
     private int currentHealth;
 
@@ -17,9 +18,20 @@ public sealed class PlayerHealth : MonoBehaviour
         get { return this.currentHealth; }
     }
 
+    public int MaxHealth
+    {
+        get { return this.maxHealth; }
+    }
+
+    public UnityEvent<int, int> OnHealthChanged
+    {
+        get { return this.onHealthChanged; }
+    }
+
     private void Awake()
     {
         this.currentHealth = this.maxHealth;
+        this.NotifyHealthChanged();
     }
 
     public void TakeDamage(int amount)
@@ -50,10 +62,41 @@ public sealed class PlayerHealth : MonoBehaviour
                 this.onDied.Invoke();
             }
         }
+
+        this.NotifyHealthChanged();
+    }
+
+    public void Heal(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        if (this.currentHealth <= 0)
+        {
+            return;
+        }
+
+        this.currentHealth += amount;
+        if (this.currentHealth > this.maxHealth)
+        {
+            this.currentHealth = this.maxHealth;
+        }
+
+        this.NotifyHealthChanged();
     }
 
     public void Die()
     {
         Destroy(this);
+    }
+
+    private void NotifyHealthChanged()
+    {
+        if (this.onHealthChanged != null)
+        {
+            this.onHealthChanged.Invoke(this.currentHealth, this.maxHealth);
+        }
     }
 }
