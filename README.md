@@ -214,6 +214,19 @@ Steven 담당 범위인 **게임 상태 전환 + UI 패널 제어 + HUD 표시 �
   - `AppendLog("Enemy is charging...")`
   - `ClearLog()`
 
+### 5) 원하는 형식(위에서 시작, 아래로 갱신, 맨 위 삭제) 적용 체크
+아래 항목이 맞으면 요청한 동작이 적용된 상태입니다.
+
+1. 새 로그 생성 시 `Content`의 마지막 자식으로 붙어 아래쪽에 추가됨
+2. `maxEntries`를 넘기면 `Content`의 가장 오래된 항목(맨 위)이 먼저 삭제됨
+3. `autoScrollToLatest = true`면 새 로그 생성 때마다 최신 로그 위치(하단)로 자동 이동
+4. 자동 스크롤을 끄고 싶으면 Inspector에서 `Auto Scroll To Latest` 체크 해제
+
+### 6) Scroll이 안 맞아 보이던 이유
+- `Vertical Layout Group` + `Content Size Fitter`를 쓰는 경우, 텍스트 생성 직후에는 `Content` 높이가 아직 확정되지 않은 프레임이 있습니다.
+- 이 타이밍에 바로 `verticalNormalizedPosition`을 바꾸면 ScrollRect가 무시하거나 덜 반영되는 것처럼 보일 수 있습니다.
+- 그래서 스크립트에서 **한 프레임 뒤** 레이아웃을 강제 갱신한 후 스크롤 값을 적용하도록 처리해야 안정적으로 동작합니다.
+
 ---
 
 ## 동작 검증 체크리스트
