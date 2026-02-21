@@ -76,15 +76,6 @@ public class GameStateManager : MonoBehaviour
         Application.Quit();
     }
 
-    public void DebugSetDead()
-    {
-        ChangeState(GameState.Dead, false);
-    }
-
-    public void DebugSetEnd()
-    {
-        ChangeState(GameState.End, false);
-    }
 
     public void ChangeState(GameState newState, bool allowCursorLock)
     {

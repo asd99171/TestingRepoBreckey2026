@@ -12,18 +12,11 @@ public class CombatLogController : MonoBehaviour
     [SerializeField] private int maxEntries = 100;
     [SerializeField] private bool autoScrollToLatest = true;
 
-    [Header("Debug Buttons (Optional)")]
-    [SerializeField] private Button btnLogAttack;
-    [SerializeField] private Button btnLogDamage;
-    [SerializeField] private Button btnLogClear;
-
     private readonly List<Text> spawnedEntries = new List<Text>();
     private Coroutine scrollCoroutine;
 
     private void Awake()
     {
-        BindDebugButtons();
-
         if (logEntryTemplate != null)
         {
             logEntryTemplate.gameObject.SetActive(false);
@@ -79,34 +72,6 @@ public class CombatLogController : MonoBehaviour
     {
         var safeDamage = Mathf.Max(0, damage);
         AppendLog($"Player does {safeDamage} damage to Enemy.");
-    }
-
-    public void DebugLogAttack()
-    {
-        AppendLog("[DEBUG] Player uses Slash.");
-    }
-
-    public void DebugLogDamage()
-    {
-        LogPlayerDamageToEnemy(12);
-    }
-
-    private void BindDebugButtons()
-    {
-        Bind(btnLogAttack, DebugLogAttack);
-        Bind(btnLogDamage, DebugLogDamage);
-        Bind(btnLogClear, ClearLog);
-    }
-
-    private static void Bind(Button button, UnityEngine.Events.UnityAction action)
-    {
-        if (button == null)
-        {
-            return;
-        }
-
-        button.onClick.RemoveListener(action);
-        button.onClick.AddListener(action);
     }
 
     private void TrimEntries()
