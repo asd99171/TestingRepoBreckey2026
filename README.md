@@ -277,8 +277,9 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
 - `Panel_HUD`
   - `Panel_MiniMap`
     - `Img_MiniMapFrame` (배경/테두리)
-    - `MiniMapArea` (RectTransform, 실제 좌표 매핑 영역)
-      - `Icon_Player` (RectTransform)
+    - `MiniMapArea` (RectTransform, 화면에 보이는 미니맵 윈도우)
+      - `MiniMapContent` (RectTransform, 실제 맵 이미지/타일이 들어가는 컨텐츠)
+      - `Icon_Player` (RectTransform, 항상 중앙 고정 권장)
       - `Icon_PlayerArrow` (RectTransform)
 
 > `Icon_PlayerArrow`는 삼각형/화살표 스프라이트를 사용하고, 기본 방향이 **위쪽(북쪽)** 을 향하도록 두는 것을 권장합니다.
@@ -288,8 +289,10 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
 2. 인스펙터 연결:
    - Player → 플레이어 Transform
    - Mini Map Area → `MiniMapArea`
+   - Mini Map Content → `MiniMapContent`
    - Player Marker → `Icon_Player`
    - Player Direction Arrow → `Icon_PlayerArrow`
+   - Use View Window Mode → 체크(권장)
 
 ### 3) 월드 범위 설정
 `MiniMapController > World Bounds (X/Z)`에 실제 플레이 가능 월드 범위를 입력:
@@ -301,8 +304,13 @@ Sami 및 Ryan 담당 로직/에셋 영역은 건드리지 않도록 구성했습
 - World Max = `(120, 120)`
 
 ### 4) 동작 원리
-- 플레이어 `(x, z)`를 월드 범위에서 0~1로 정규화하여 미니맵 좌표로 변환
-- 북쪽 고정 미니맵이므로 맵 자체는 회전하지 않음
+- 플레이어 `(x, z)`를 월드 범위에서 0~1로 정규화
+- `Use View Window Mode`가 켜져 있으면:
+  - 플레이어 마커는 미니맵 중앙에 고정
+  - `MiniMapContent`가 반대로 이동하여 플레이어 주변 환경이 창 안에서 흘러가듯 보임
+  - 즉, **맵은 북쪽 고정 + 플레이어 중심 시야 윈도우형**
+- `Use View Window Mode`를 끄면:
+  - 기존 방식처럼 고정된 맵 위를 플레이어 마커가 이동
 - 화살표는 `-player.eulerAngles.y`로 회전되어 현재 시야 방향을 표시
 
 ### 5) 디버그 이동(WASD)으로 미니맵 확인

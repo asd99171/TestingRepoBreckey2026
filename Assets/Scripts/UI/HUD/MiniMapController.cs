@@ -5,6 +5,7 @@ public class MiniMapController : MonoBehaviour
     [Header("References")]
     [SerializeField] private Transform player;
     [SerializeField] private RectTransform miniMapArea;
+    [SerializeField] private RectTransform miniMapContent;
     [SerializeField] private RectTransform playerMarker;
     [SerializeField] private RectTransform playerDirectionArrow;
 
@@ -12,7 +13,8 @@ public class MiniMapController : MonoBehaviour
     [SerializeField] private Vector2 worldMin = new Vector2(-50f, -50f);
     [SerializeField] private Vector2 worldMax = new Vector2(50f, 50f);
 
-    [Header("Marker")]
+    [Header("Mode")]
+    [SerializeField] private bool useViewWindowMode = true;
     [SerializeField] private bool clampMarkerInsideMap = true;
 
     [Header("Debug Movement")]
@@ -42,7 +44,7 @@ public class MiniMapController : MonoBehaviour
             return;
         }
 
-        UpdatePlayerMarkerPosition();
+        UpdateMapAndMarkerPosition();
         UpdatePlayerDirectionArrow();
     }
 
@@ -58,10 +60,22 @@ public class MiniMapController : MonoBehaviour
         worldMax = max;
     }
 
-    private void UpdatePlayerMarkerPosition()
+    private void UpdateMapAndMarkerPosition()
     {
-        var size = miniMapArea.rect.size;
+        var normalized = GetNormalizedPosition();
 
+        if (useViewWindowMode && miniMapContent != null)
+        {
+            CenterPlayerMarker();
+            UpdateMapContentOffset(normalized);
+            return;
+        }
+
+        UpdatePlayerMarkerOnArea(normalized);
+    }
+
+    private Vector2 GetNormalizedPosition()
+    {
         var safeRangeX = Mathf.Max(0.0001f, worldMax.x - worldMin.x);
         var safeRangeZ = Mathf.Max(0.0001f, worldMax.y - worldMin.y);
 
@@ -75,10 +89,40 @@ public class MiniMapController : MonoBehaviour
             normalizedY = Mathf.Clamp01(normalizedY);
         }
 
-        var anchoredX = (normalizedX - 0.5f) * size.x;
-        var anchoredY = (normalizedY - 0.5f) * size.y;
+        return new Vector2(normalizedX, normalizedY);
+    }
 
+    private void UpdatePlayerMarkerOnArea(Vector2 normalized)
+    {
+        var size = miniMapArea.rect.size;
+        var anchoredX = (normalized.x - 0.5f) * size.x;
+        var anchoredY = (normalized.y - 0.5f) * size.y;
         playerMarker.anchoredPosition = new Vector2(anchoredX, anchoredY);
+    }
+
+    private void CenterPlayerMarker()
+    {
+        playerMarker.anchoredPosition = Vector2.zero;
+    }
+
+    private void UpdateMapContentOffset(Vector2 normalized)
+    {
+        var areaSize = miniMapArea.rect.size;
+        var contentSize = miniMapContent.rect.size;
+
+        var playerOnContentX = (normalized.x - 0.5f) * contentSize.x;
+        var playerOnContentY = (normalized.y - 0.5f) * contentSize.y;
+
+        var targetX = -playerOnContentX;
+        var targetY = -playerOnContentY;
+
+        var moveLimitX = Mathf.Max(0f, (contentSize.x - areaSize.x) * 0.5f);
+        var moveLimitY = Mathf.Max(0f, (contentSize.y - areaSize.y) * 0.5f);
+
+        targetX = Mathf.Clamp(targetX, -moveLimitX, moveLimitX);
+        targetY = Mathf.Clamp(targetY, -moveLimitY, moveLimitY);
+
+        miniMapContent.anchoredPosition = new Vector2(targetX, targetY);
     }
 
     private void UpdatePlayerDirectionArrow()
