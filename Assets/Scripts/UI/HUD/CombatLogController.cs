@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,6 +10,7 @@ public class CombatLogController : MonoBehaviour
     [SerializeField] private RectTransform contentRoot;
     [SerializeField] private Text logEntryTemplate;
     [SerializeField] private int maxEntries = 100;
+    [SerializeField] private bool autoScrollToLatest = true;
 
     [Header("Debug Buttons (Optional)")]
     [SerializeField] private Button btnLogAttack;
@@ -16,7 +18,8 @@ public class CombatLogController : MonoBehaviour
     [SerializeField] private Button btnLogOxygen;
     [SerializeField] private Button btnLogClear;
 
-    private readonly Queue<Text> spawnedEntries = new Queue<Text>();
+    private readonly List<Text> spawnedEntries = new List<Text>();
+    private Coroutine scrollCoroutine;
 
     private void Awake()
     {
@@ -44,24 +47,33 @@ public class CombatLogController : MonoBehaviour
         var entry = Instantiate(logEntryTemplate, contentRoot);
         entry.gameObject.SetActive(true);
         entry.text = $"[{System.DateTime.Now:HH:mm:ss}] {message}";
-        spawnedEntries.Enqueue(entry);
+        entry.transform.SetAsLastSibling();
+        spawnedEntries.Add(entry);
 
         TrimEntries();
-        ScrollToBottom();
+        if (autoScrollToLatest)
+        {
+            ScrollToBottom();
+        }
     }
 
     public void ClearLog()
     {
-        while (spawnedEntries.Count > 0)
+        for (var i = 0; i < spawnedEntries.Count; i++)
         {
-            var entry = spawnedEntries.Dequeue();
+            var entry = spawnedEntries[i];
             if (entry != null)
             {
                 Destroy(entry.gameObject);
             }
         }
 
-        ScrollToBottom();
+        spawnedEntries.Clear();
+
+        if (autoScrollToLatest)
+        {
+            ScrollToBottom();
+        }
     }
 
     public void DebugLogAttack()
@@ -103,7 +115,8 @@ public class CombatLogController : MonoBehaviour
         var safeMax = Mathf.Max(1, maxEntries);
         while (spawnedEntries.Count > safeMax)
         {
-            var old = spawnedEntries.Dequeue();
+            var old = spawnedEntries[0];
+            spawnedEntries.RemoveAt(0);
             if (old != null)
             {
                 Destroy(old.gameObject);
@@ -118,7 +131,21 @@ public class CombatLogController : MonoBehaviour
             return;
         }
 
+        if (scrollCoroutine != null)
+        {
+            StopCoroutine(scrollCoroutine);
+        }
+
+        scrollCoroutine = StartCoroutine(CoScrollToBottom());
+    }
+
+    private IEnumerator CoScrollToBottom()
+    {
+        yield return null;
+
         Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRoot);
         scrollRect.verticalNormalizedPosition = 0f;
+        scrollCoroutine = null;
     }
 }
