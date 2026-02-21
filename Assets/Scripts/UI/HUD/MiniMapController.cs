@@ -1,30 +1,73 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class MiniMapController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private Transform player;
+    [SerializeField] private GridMap gridMap;
+    [SerializeField] private GridOccupancyIndex occupancyIndex;
     [SerializeField] private RectTransform miniMapArea;
     [SerializeField] private RectTransform miniMapContent;
     [SerializeField] private RectTransform playerMarker;
     [SerializeField] private RectTransform playerDirectionArrow;
 
-    [Header("Map Bounds Source (Optional)")]
+    [Header("Grid Window Minimap")]
+    [SerializeField] private bool useGridWindowMinimap = true;
+    [SerializeField] private Image gridCellPrefab;
+    [SerializeField] private int viewRadiusCells = 5;
+    [SerializeField] private float cellPixelSize = 14f;
+    [SerializeField] private float refreshIntervalSeconds = 0.15f;
+
+    [Header("Colors")]
+    [SerializeField] private Color floorColor = new Color(0.15f, 0.17f, 0.2f, 0.9f);
+    [SerializeField] private Color blockedColor = new Color(0.05f, 0.05f, 0.06f, 0.95f);
+    [SerializeField] private Color enemyColor = new Color(0.78f, 0.2f, 0.2f, 0.95f);
+    [SerializeField] private Color playerColor = new Color(0.2f, 0.78f, 0.3f, 0.95f);
+
+    [Header("Map Bounds Source (Optional, Legacy Mode)")]
     [SerializeField] private Collider mapBoundsCollider;
     [SerializeField] private Renderer mapBoundsRenderer;
     [SerializeField] private bool applyBoundsFromMapSourceOnAwake = true;
 
-    [Header("World Bounds (X/Z)")]
+    [Header("World Bounds (X/Z, Legacy Mode)")]
     [SerializeField] private Vector2 worldMin = new Vector2(-50f, -50f);
     [SerializeField] private Vector2 worldMax = new Vector2(50f, 50f);
 
-    [Header("Mode")]
+    [Header("Legacy Mode")]
     [SerializeField] private bool useViewWindowMode = true;
     [SerializeField] private bool clampMarkerInsideMap = true;
 
+    private readonly Dictionary<Vector2Int, Image> windowCells = new Dictionary<Vector2Int, Image>();
+    private float refreshTimer;
+
     private void Awake()
     {
-        if (applyBoundsFromMapSourceOnAwake)
+        if (this.gridMap == null)
+        {
+            this.gridMap = FindFirstObjectByType<GridMap>();
+        }
+
+        if (this.occupancyIndex == null)
+        {
+            this.occupancyIndex = FindFirstObjectByType<GridOccupancyIndex>();
+        }
+
+        if (this.player == null)
+        {
+            var playerHealth = FindFirstObjectByType<PlayerHealth>();
+            if (playerHealth != null)
+            {
+                this.player = playerHealth.transform;
+            }
+        }
+
+        if (this.useGridWindowMinimap)
+        {
+            this.BuildWindowGrid();
+        }
+        else if (applyBoundsFromMapSourceOnAwake)
         {
             ApplyWorldBoundsFromMapSource();
         }
@@ -34,6 +77,12 @@ public class MiniMapController : MonoBehaviour
     {
         if (miniMapArea == null || playerMarker == null || player == null)
         {
+            return;
+        }
+
+        if (this.useGridWindowMinimap)
+        {
+            this.UpdateGridWindowMinimap();
             return;
         }
 
@@ -74,6 +123,104 @@ public class MiniMapController : MonoBehaviour
         }
 
         SetWorldBounds(new Vector2(bounds.min.x, bounds.min.z), new Vector2(bounds.max.x, bounds.max.z));
+    }
+
+    private void BuildWindowGrid()
+    {
+        if (this.miniMapContent == null || this.gridCellPrefab == null)
+        {
+            return;
+        }
+
+        foreach (var kv in this.windowCells)
+        {
+            if (kv.Value != null)
+            {
+                Destroy(kv.Value.gameObject);
+            }
+        }
+
+        this.windowCells.Clear();
+
+        int safeRadius = Mathf.Max(1, this.viewRadiusCells);
+        int side = (safeRadius * 2) + 1;
+
+        this.miniMapContent.sizeDelta = new Vector2(side * this.cellPixelSize, side * this.cellPixelSize);
+
+        for (int y = -safeRadius; y <= safeRadius; y++)
+        {
+            for (int x = -safeRadius; x <= safeRadius; x++)
+            {
+                Image cell = Instantiate(this.gridCellPrefab, this.miniMapContent);
+                cell.gameObject.SetActive(true);
+
+                RectTransform rect = cell.rectTransform;
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.sizeDelta = new Vector2(this.cellPixelSize, this.cellPixelSize);
+                rect.anchoredPosition = new Vector2(x * this.cellPixelSize, y * this.cellPixelSize);
+
+                this.windowCells[new Vector2Int(x, y)] = cell;
+            }
+        }
+
+        this.playerMarker.anchoredPosition = Vector2.zero;
+    }
+
+    private void UpdateGridWindowMinimap()
+    {
+        this.refreshTimer -= Time.deltaTime;
+        if (this.refreshTimer > 0f)
+        {
+            this.UpdatePlayerDirectionArrow();
+            return;
+        }
+
+        this.refreshTimer = Mathf.Max(0.03f, this.refreshIntervalSeconds);
+
+        if (this.gridMap == null)
+        {
+            return;
+        }
+
+        Vector2Int playerCell = this.gridMap.WorldToCell(this.gridMap.SnapToCellCenter(this.player.position));
+
+        foreach (var kv in this.windowCells)
+        {
+            Vector2Int offset = kv.Key;
+            Image cellImage = kv.Value;
+            Vector2Int targetCell = playerCell + offset;
+
+            Color color = this.blockedColor;
+
+            if (this.gridMap.HasFloor(targetCell))
+            {
+                color = this.floorColor;
+
+                if (this.occupancyIndex != null)
+                {
+                    GridOccupant occ = this.occupancyIndex.GetAtCell(targetCell);
+                    if (occ != null && occ.GetComponent<EnemyHealth>() != null)
+                    {
+                        color = this.enemyColor;
+                    }
+                }
+            }
+
+            if (offset == Vector2Int.zero)
+            {
+                color = this.playerColor;
+            }
+
+            if (cellImage != null)
+            {
+                cellImage.color = color;
+            }
+        }
+
+        this.playerMarker.anchoredPosition = Vector2.zero;
+        this.UpdatePlayerDirectionArrow();
     }
 
     private bool TryGetMapBounds(out Bounds bounds)

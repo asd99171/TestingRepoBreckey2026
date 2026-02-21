@@ -55,6 +55,35 @@
 
 (스크립트에서 필드 제거됨)
 
+
+
+### 4) 미니맵을 "플레이어 주변 Grid 창" 방식으로 사용
+
+`MiniMapController`는 이제 기본값으로 **플레이어 중심 사각 Grid 미니맵**을 지원합니다.
+
+- `viewRadiusCells = 5` 이면 `(2*5+1)=11`칸 정사각형 창
+- 즉, 플레이어 주변 약 10칸 범위를 사각형으로 보여줌
+- 중앙 칸은 플레이어, 적이 있는 칸은 `enemyColor`, 바닥 없는 칸은 `blockedColor`로 표시
+
+설정 방법:
+
+1. `Panel_MiniMap`에 `MiniMapController` 추가
+2. 인스펙터 연결
+   - `Player` (비워도 자동 탐색)
+   - `Grid Map`
+   - `Grid Occupancy Index`
+   - `Mini Map Area`
+   - `Mini Map Content`
+   - `Player Marker`, `Player Direction Arrow`
+   - `Grid Cell Prefab` (UI `Image` 프리팹 1개)
+3. 권장 값
+   - `Use Grid Window Minimap` = On
+   - `View Radius Cells` = `5` (원하면 `10`으로 확장 가능)
+   - `Cell Pixel Size` = `12~16`
+   - `Refresh Interval Seconds` = `0.1~0.2`
+
+> 참고: 이 방식은 월드 전체 텍스처를 스크롤하는 방식이 아니라, 플레이어 주변 셀을 매 프레임/주기마다 샘플링해서 그려주는 방식입니다.
+
 ---
 
 ## 동작 체크리스트
@@ -73,4 +102,5 @@
 - `Assets/Scripts/UI/HUD/CombatLogController.cs`
 - `Assets/Scripts/UI/UIRoot.cs`
 - `Assets/Scripts/Core/GameStateManager.cs`
+- `Assets/Scripts/UI/HUD/MiniMapController.cs`
 
