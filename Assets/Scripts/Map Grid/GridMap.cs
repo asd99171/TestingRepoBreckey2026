@@ -2,6 +2,16 @@ using UnityEngine;
 
 public sealed class GridMap : MonoBehaviour
 {
+    public readonly struct BlockingVisualInfo
+    {
+        public BlockingVisualInfo(Vector2 normalizedSize)
+        {
+            this.NormalizedSize = normalizedSize;
+        }
+
+        public Vector2 NormalizedSize { get; }
+    }
+
     [Header("Grid")]
     [SerializeField] private float cellSize = 1f;
     [SerializeField] private float cellCenterY = 0f;
@@ -20,6 +30,8 @@ public sealed class GridMap : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool drawDebug = true;
+
+    private static readonly Collider[] BlockingOverlapBuffer = new Collider[32];
 
     public float CellSize
     {
@@ -114,6 +126,60 @@ public sealed class GridMap : MonoBehaviour
             return false;
         }
 
+        return true;
+    }
+
+    public bool TryGetBlockingVisual(Vector2Int cell, out BlockingVisualInfo info)
+    {
+        Vector3 center = this.CellToWorldCenter(cell) + new Vector3(0f, Mathf.Max(0.5f, this.castHeight * 0.5f), 0f);
+        Vector3 halfExtents = new Vector3(this.cellSize * 0.5f, Mathf.Max(0.5f, this.castHeight * 0.5f), this.cellSize * 0.5f);
+
+        int hitCount = Physics.OverlapBoxNonAlloc(
+            center,
+            halfExtents,
+            BlockingOverlapBuffer,
+            Quaternion.identity,
+            this.blockingMask,
+            QueryTriggerInteraction.Ignore
+        );
+
+        if (hitCount <= 0)
+        {
+            info = default;
+            return false;
+        }
+
+        Collider selected = null;
+        float bestScore = float.MaxValue;
+        Vector3 cellCenter = this.CellToWorldCenter(cell);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider candidate = BlockingOverlapBuffer[i];
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            Vector3 closest = candidate.ClosestPoint(cellCenter);
+            float score = (closest - cellCenter).sqrMagnitude;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                selected = candidate;
+            }
+        }
+
+        if (selected == null)
+        {
+            info = default;
+            return false;
+        }
+
+        Vector3 size = selected.bounds.size;
+        float normalizedX = Mathf.Clamp(size.x / this.cellSize, 0.06f, 1f);
+        float normalizedZ = Mathf.Clamp(size.z / this.cellSize, 0.06f, 1f);
+        info = new BlockingVisualInfo(new Vector2(normalizedX, normalizedZ));
         return true;
     }
 }
