@@ -20,6 +20,12 @@ public class MiniMapController : MonoBehaviour
     [SerializeField] private float cellPixelSize = 14f;
     [SerializeField] private float refreshIntervalSeconds = 0.15f;
 
+    [Header("Wall Overlay")]
+    [SerializeField] private bool showBlockingWalls = true;
+    [SerializeField] private LayerMask wallMask;
+    [SerializeField] private Color wallColor = new Color(0.9f, 0.9f, 0.95f, 0.9f);
+    [SerializeField] private float minWallLineThicknessPixels = 1f;
+
     [Header("Colors")]
     [SerializeField] private Color floorColor = new Color(0.15f, 0.17f, 0.2f, 0.9f);
     [SerializeField] private Color blockedColor = new Color(0.05f, 0.05f, 0.06f, 0.95f);
@@ -40,6 +46,8 @@ public class MiniMapController : MonoBehaviour
     [SerializeField] private bool clampMarkerInsideMap = true;
 
     private readonly Dictionary<Vector2Int, Image> windowCells = new Dictionary<Vector2Int, Image>();
+    private readonly List<BoxCollider> cachedWallColliders = new List<BoxCollider>();
+    private readonly List<Image> wallOverlayImages = new List<Image>();
     private float refreshTimer;
 
     private void Awake()
@@ -71,6 +79,8 @@ public class MiniMapController : MonoBehaviour
         {
             ApplyWorldBoundsFromMapSource();
         }
+
+        this.CacheWallColliders();
     }
 
     private void LateUpdate()
@@ -168,6 +178,35 @@ public class MiniMapController : MonoBehaviour
         this.playerMarker.anchoredPosition = Vector2.zero;
     }
 
+    private void CacheWallColliders()
+    {
+        this.cachedWallColliders.Clear();
+
+        if (!this.showBlockingWalls)
+        {
+            return;
+        }
+
+        BoxCollider[] allBoxes = FindObjectsByType<BoxCollider>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        int maskValue = this.wallMask.value;
+
+        foreach (BoxCollider box in allBoxes)
+        {
+            if (box == null || !box.enabled)
+            {
+                continue;
+            }
+
+            bool inMask = (maskValue & (1 << box.gameObject.layer)) != 0;
+            if (!inMask)
+            {
+                continue;
+            }
+
+            this.cachedWallColliders.Add(box);
+        }
+    }
+
     private void UpdateGridWindowMinimap()
     {
         this.refreshTimer -= Time.deltaTime;
@@ -219,8 +258,87 @@ public class MiniMapController : MonoBehaviour
             }
         }
 
+        this.RenderWallOverlayGridMode(playerCell);
         this.playerMarker.anchoredPosition = Vector2.zero;
         this.UpdatePlayerDirectionArrow();
+    }
+
+    private void RenderWallOverlayGridMode(Vector2Int playerCell)
+    {
+        this.HideAllWallOverlays();
+
+        if (!this.showBlockingWalls || this.miniMapContent == null || this.cachedWallColliders.Count == 0)
+        {
+            return;
+        }
+
+        float cellSize = this.gridMap != null ? Mathf.Max(0.001f, this.gridMap.CellSize) : 1f;
+        float pixelsPerWorld = this.cellPixelSize / cellSize;
+        float worldHalfSpan = Mathf.Max(1, this.viewRadiusCells) * cellSize;
+
+        int shown = 0;
+        for (int i = 0; i < this.cachedWallColliders.Count; i++)
+        {
+            BoxCollider box = this.cachedWallColliders[i];
+            if (box == null || !box.enabled)
+            {
+                continue;
+            }
+
+            Vector3 worldCenter = box.bounds.center;
+            float dx = worldCenter.x - (playerCell.x * cellSize);
+            float dz = worldCenter.z - (playerCell.y * cellSize);
+
+            if (Mathf.Abs(dx) > worldHalfSpan + box.bounds.extents.x || Mathf.Abs(dz) > worldHalfSpan + box.bounds.extents.z)
+            {
+                continue;
+            }
+
+            Image wallImage = this.GetOrCreateWallOverlay(shown);
+            RectTransform rect = wallImage.rectTransform;
+
+            rect.SetParent(this.miniMapContent, false);
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(dx * pixelsPerWorld, dz * pixelsPerWorld);
+
+            float pixelWidth = Mathf.Max(this.minWallLineThicknessPixels, box.bounds.size.x * pixelsPerWorld);
+            float pixelHeight = Mathf.Max(this.minWallLineThicknessPixels, box.bounds.size.z * pixelsPerWorld);
+            rect.sizeDelta = new Vector2(pixelWidth, pixelHeight);
+
+            float yaw = box.transform.eulerAngles.y;
+            rect.localEulerAngles = new Vector3(0f, 0f, -yaw);
+            wallImage.color = this.wallColor;
+            wallImage.gameObject.SetActive(true);
+            shown++;
+        }
+    }
+
+    private Image GetOrCreateWallOverlay(int index)
+    {
+        while (this.wallOverlayImages.Count <= index)
+        {
+            GameObject go = new GameObject("MiniMapWall", typeof(RectTransform), typeof(Image));
+            Image image = go.GetComponent<Image>();
+            image.raycastTarget = false;
+            go.SetActive(false);
+            this.wallOverlayImages.Add(image);
+        }
+
+        return this.wallOverlayImages[index];
+    }
+
+    private void HideAllWallOverlays()
+    {
+        for (int i = 0; i < this.wallOverlayImages.Count; i++)
+        {
+            Image wall = this.wallOverlayImages[i];
+            if (wall != null)
+            {
+                wall.gameObject.SetActive(false);
+            }
+        }
     }
 
     private bool TryGetMapBounds(out Bounds bounds)
