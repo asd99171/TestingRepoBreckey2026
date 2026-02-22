@@ -25,6 +25,11 @@ public class MiniMapController : MonoBehaviour
     [SerializeField] private Color blockedColor = new Color(0.05f, 0.05f, 0.06f, 0.95f);
     [SerializeField] private Color enemyColor = new Color(0.78f, 0.2f, 0.2f, 0.95f);
     [SerializeField] private Color playerColor = new Color(0.2f, 0.78f, 0.3f, 0.95f);
+    [SerializeField] private Color wallColor = new Color(0.8f, 0.82f, 0.86f, 0.95f);
+
+    [Header("Wall Overlay")]
+    [SerializeField] private bool drawBlockingWalls = true;
+    [SerializeField] private float minimumWallPixelThickness = 1f;
 
     [Header("Map Bounds Source (Optional, Legacy Mode)")]
     [SerializeField] private Collider mapBoundsCollider;
@@ -40,6 +45,7 @@ public class MiniMapController : MonoBehaviour
     [SerializeField] private bool clampMarkerInsideMap = true;
 
     private readonly Dictionary<Vector2Int, Image> windowCells = new Dictionary<Vector2Int, Image>();
+    private readonly Dictionary<Vector2Int, RectTransform> wallOverlays = new Dictionary<Vector2Int, RectTransform>();
     private float refreshTimer;
 
     private void Awake()
@@ -140,7 +146,16 @@ public class MiniMapController : MonoBehaviour
             }
         }
 
+        foreach (var kv in this.wallOverlays)
+        {
+            if (kv.Value != null)
+            {
+                Destroy(kv.Value.gameObject);
+            }
+        }
+
         this.windowCells.Clear();
+        this.wallOverlays.Clear();
 
         int safeRadius = Mathf.Max(1, this.viewRadiusCells);
         int side = (safeRadius * 2) + 1;
@@ -162,6 +177,22 @@ public class MiniMapController : MonoBehaviour
                 rect.anchoredPosition = new Vector2(x * this.cellPixelSize, y * this.cellPixelSize);
 
                 this.windowCells[new Vector2Int(x, y)] = cell;
+
+                var wallObject = new GameObject($"WallOverlay_{x}_{y}", typeof(RectTransform), typeof(Image));
+                wallObject.transform.SetParent(this.miniMapContent, false);
+                var wallRect = wallObject.GetComponent<RectTransform>();
+                wallRect.anchorMin = new Vector2(0.5f, 0.5f);
+                wallRect.anchorMax = new Vector2(0.5f, 0.5f);
+                wallRect.pivot = new Vector2(0.5f, 0.5f);
+                wallRect.anchoredPosition = rect.anchoredPosition;
+                wallRect.sizeDelta = Vector2.zero;
+
+                var wallImage = wallObject.GetComponent<Image>();
+                wallImage.raycastTarget = false;
+                wallImage.color = this.wallColor;
+                wallObject.SetActive(false);
+
+                this.wallOverlays[new Vector2Int(x, y)] = wallRect;
             }
         }
 
@@ -208,6 +239,8 @@ public class MiniMapController : MonoBehaviour
                 }
             }
 
+            this.UpdateWallOverlay(offset, targetCell);
+
             if (offset == Vector2Int.zero)
             {
                 color = this.playerColor;
@@ -221,6 +254,32 @@ public class MiniMapController : MonoBehaviour
 
         this.playerMarker.anchoredPosition = Vector2.zero;
         this.UpdatePlayerDirectionArrow();
+    }
+
+    private void UpdateWallOverlay(Vector2Int offset, Vector2Int targetCell)
+    {
+        if (!this.wallOverlays.TryGetValue(offset, out RectTransform wallRect) || wallRect == null)
+        {
+            return;
+        }
+
+        if (!this.drawBlockingWalls || this.gridMap == null)
+        {
+            wallRect.gameObject.SetActive(false);
+            return;
+        }
+
+        if (!this.gridMap.TryGetBlockingVisual(targetCell, out GridMap.BlockingVisualInfo visual))
+        {
+            wallRect.gameObject.SetActive(false);
+            return;
+        }
+
+        float width = Mathf.Max(this.minimumWallPixelThickness, visual.NormalizedSize.x * this.cellPixelSize);
+        float height = Mathf.Max(this.minimumWallPixelThickness, visual.NormalizedSize.y * this.cellPixelSize);
+
+        wallRect.sizeDelta = new Vector2(width, height);
+        wallRect.gameObject.SetActive(true);
     }
 
     private bool TryGetMapBounds(out Bounds bounds)
